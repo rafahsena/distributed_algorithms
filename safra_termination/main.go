@@ -23,7 +23,6 @@ type Neighbour struct {
 	Weight uint32
 	From   chan Message // Canal que envia
 	To     chan Message // Canal que recebe
-	black  bool
 }
 
 func redirect(in chan Message, neigh Neighbour) {
@@ -99,11 +98,11 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	go process("T", Message{}, &wg, Neighbour{"R", 4, rT, tR, false}, Neighbour{"S", 1, sT, tS, false})
-	go process("S", Message{}, &wg, Neighbour{"R", 1, rS, sR, false}, Neighbour{"T", 1, tS, sT, false})
-	go process("R", Message{}, &wg, Neighbour{"Q", 1, qR, rQ, false}, Neighbour{"P", 3, pR, rP, false}, Neighbour{"S", 1, sR, rS, false}, Neighbour{"T", 4, tR, rT, false})
-	go process("Q", Message{}, &wg, Neighbour{"R", 1, rQ, qR, false}, Neighbour{"P", 1, pQ, qP, false})
-	process("P", Message{"init", 0}, &wg, Neighbour{"Q", 1, qP, pQ, false}, Neighbour{"R", 3, rP, pR, false})
+	go process("T", Message{}, &wg, Neighbour{"R", 4, rT, tR}, Neighbour{"S", 1, sT, tS})
+	go process("S", Message{}, &wg, Neighbour{"R", 1, rS, sR}, Neighbour{"T", 1, tS, sT})
+	go process("R", Message{}, &wg, Neighbour{"Q", 1, qR, rQ}, Neighbour{"P", 3, pR, rP}, Neighbour{"S", 1, sR, rS}, Neighbour{"T", 4, tR, rT})
+	go process("Q", Message{}, &wg, Neighbour{"R", 1, rQ, qR}, Neighbour{"P", 1, pQ, qP})
+	process("P", Message{"init", 0}, &wg, Neighbour{"Q", 1, qP, pQ}, Neighbour{"R", 3, rP, pR})
 	time.Sleep(2 * time.Second)
 
 }
