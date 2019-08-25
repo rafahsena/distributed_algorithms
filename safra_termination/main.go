@@ -15,46 +15,103 @@ type Message struct {
 
 type Token struct {
 	counter int32
-	black   bool
+	Sender  string
 }
 
 type Neighbour struct {
 	ID     string
 	Weight uint32
-	From   chan Message // Canal que envia
-	To     chan Message // Canal que recebe
+	From   chan interface{} // Canal que envia
+	To     chan interface{} // Canal que recebe
 }
 
-func redirect(in chan Message, neigh Neighbour) {
-	for {
-		msg := <-neigh.From
-		in <- msg
+func redirect(inChandy chan Message, inSafra chan Token, neigh Neighbour) {
+	for value := range neigh.From {
+		switch msg := value.(type) {
+		case Token:
+			inSafra <- msg
+		case Message:
+			inChandy <- msg
+		default:
+			fmt.Println("Deu ruim")
+		}
 	}
 }
 
-func process(id string, msg Message, wg *sync.WaitGroup, neighs ...Neighbour) {
-	wg.Add(1)
+func safra(id string, msg Message, nmap map[string]Neighbour, wg *sync.WaitGroup, cont *int, inSafra chan Token, neighs []Neighbour) {
+
+	if msg.Sender == "init" {
+		tk := Token{0, id}
+		wg.Wait()
+		for _, neigh := range neighs {
+			// Entrega o msg para os vizinhos
+			neigh.To <- tk
+		}
+	}
+	for token := range inSafra {
+		tk := token
+		println("------------------")
+		println(tk.counter)
+		println("------------------")
+		if msg.Sender == "init" {
+			if tk.counter == 0 {
+				break
+			} else {
+				tk.counter = 0
+			}
+		}
+		tk.counter += int32(*cont)
+		wg.Wait()
+		for _, neigh := range neighs {
+			// Entrega o msg para o vizinho se ele não for o pai
+			if token.Sender != neigh.ID {
+				tk.Sender = id
+				neigh.To <- tk
+			}
+		}
+		nmap[token.Sender].To <- tk
+	}
+	fmt.Println("Cabou")
+
+}
+
+func process(id string, msg Message, neighs ...Neighbour) {
 	var pai Neighbour
 	var dist uint32 = math.MaxUint32
+	cont := 0
+	var wg sync.WaitGroup
 
-	// Redirecionando todos os canais de entrada para um único canal "in" de entrada
-	in := make(chan Message, 1)
+	// Redirecionando todos os canais de entrada para um único canal "in_chandy" de entrada
+	inChandy := make(chan Message)
+	inSafra := make(chan Token)
 	nmap := make(map[string]Neighbour)
 
 	for _, neigh := range neighs {
 		nmap[neigh.ID] = neigh
-		go redirect(in, neigh)
+		go redirect(inChandy, inSafra, neigh)
 	}
 
+	// Algoritmo de Safra
+	go safra(id, msg, nmap, &wg, &cont, inSafra, neighs)
+
+	// Chandy-Misra algorithm
 	if msg.Sender == "init" {
 		// Processo iniciador
+		wg.Add(1)
 		dist = 0
 		message := Message{id, dist}
 		for _, neigh := range neighs {
 			neigh.To <- message // Envia o msg do iniciador para o vizinho
+			cont++
+		}
+		wg.Done()
+		for range inChandy {
+			cont--
 		}
 	} else {
-		for message := range in {
+		for message := range inChandy {
+			wg.Add(1)
+			cont--
 			// Processo não iniciador
 			fmt.Printf("De %s para %s\n", message.Sender, id)
 			neigh := nmap[message.Sender]
@@ -69,40 +126,37 @@ func process(id string, msg Message, wg *sync.WaitGroup, neighs ...Neighbour) {
 						message.Sender = id
 						message.dist = dist
 						neigh.To <- message
+						cont++
 					}
 				}
-			} else {
-				//fmt.Printf("O caminho em %s já é o mais curto no momento\n", id)
 			}
 			fmt.Printf("%s: dist -> %d, pai: %s\n", id, dist, pai.ID)
+			wg.Done()
 		}
 	}
 
-	wg.Done()
 }
 
 func main() {
 
-	pR := make(chan Message, 1)
-	tS := make(chan Message, 1)
-	sT := make(chan Message, 1)
-	rQ := make(chan Message, 1)
-	rP := make(chan Message, 1)
-	qR := make(chan Message, 1)
-	pQ := make(chan Message, 1)
-	qP := make(chan Message, 1)
-	rT := make(chan Message, 1)
-	tR := make(chan Message, 1)
-	rS := make(chan Message, 1)
-	sR := make(chan Message, 1)
+	pR := make(chan interface{})
+	tS := make(chan interface{})
+	sT := make(chan interface{})
+	rQ := make(chan interface{})
+	rP := make(chan interface{})
+	qR := make(chan interface{})
+	pQ := make(chan interface{})
+	qP := make(chan interface{})
+	rT := make(chan interface{})
+	tR := make(chan interface{})
+	rS := make(chan interface{})
+	sR := make(chan interface{})
 
-	var wg sync.WaitGroup
-
-	go process("T", Message{}, &wg, Neighbour{"R", 4, rT, tR}, Neighbour{"S", 1, sT, tS})
-	go process("S", Message{}, &wg, Neighbour{"R", 1, rS, sR}, Neighbour{"T", 1, tS, sT})
-	go process("R", Message{}, &wg, Neighbour{"Q", 1, qR, rQ}, Neighbour{"P", 3, pR, rP}, Neighbour{"S", 1, sR, rS}, Neighbour{"T", 4, tR, rT})
-	go process("Q", Message{}, &wg, Neighbour{"R", 1, rQ, qR}, Neighbour{"P", 1, pQ, qP})
-	process("P", Message{"init", 0}, &wg, Neighbour{"Q", 1, qP, pQ}, Neighbour{"R", 3, rP, pR})
+	go process("T", Message{}, Neighbour{"R", 4, rT, tR}, Neighbour{"S", 1, sT, tS})
+	go process("S", Message{}, Neighbour{"R", 1, rS, sR}, Neighbour{"T", 1, tS, sT})
+	go process("R", Message{}, Neighbour{"Q", 1, qR, rQ}, Neighbour{"P", 3, pR, rP}, Neighbour{"S", 1, sR, rS}, Neighbour{"T", 4, tR, rT})
+	go process("Q", Message{}, Neighbour{"R", 1, rQ, qR}, Neighbour{"P", 1, pQ, qP})
+	process("P", Message{"init", 0}, Neighbour{"Q", 1, qP, pQ}, Neighbour{"R", 3, rP, pR})
 	time.Sleep(2 * time.Second)
 
 }
