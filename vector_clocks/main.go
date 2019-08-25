@@ -13,7 +13,7 @@ type Message struct {
 }
 
 func event(pid int, counter [3]int) {
-	fmt.Printf("Event in process pid=%v. Counter=%v\n", pid, counter)
+	fmt.Printf("Event in process pid=%v. Contador = %v\n", pid, counter)
 }
 
 func max(x, y int) int {
@@ -38,7 +38,7 @@ func calcVectorTimestamp(recvTimestamp [3]int, counter [3]int, pid int) [3]int {
 func sendMessage(ch chan Message, pid int, counter [3]int) [3]int {
 	counter[pid-1]++
 	ch <- Message{Body: "Test msg!!!", Timestamp: counter}
-	fmt.Printf("Message sent from pid=%v. Counter=%v\n", pid, counter)
+	fmt.Printf("Mensagem enviada por pid=%v. Contador = %v\n", pid, counter)
 	return counter
 
 }
@@ -48,7 +48,7 @@ func receiveMessage(ch chan Message, pid int, counter [3]int) [3]int {
 	message.mux.Lock()
 	defer message.mux.Unlock()
 	counter = calcVectorTimestamp(message.Timestamp, counter, pid)
-	fmt.Printf("Message received at pid=%v. Counter=%v\n", pid, counter)
+	fmt.Printf("Mensagem recebida no pid=%v. Contador = %v\n", pid, counter)
 	return counter
 }
 
