@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 type Message struct {
 	id string
@@ -18,11 +21,13 @@ type Children struct {
 }
 
 func redirect(in chan Token, child Children) {
-	token := <-child.From
-	in <- token
+	for {
+		token := <-child.From
+		in <- token
+	}
 }
 
-func node(id string, msg Message, value int32, children ...Children) {
+func node(id string, msg Message, value int32, wg *sync.WaitGroup, children ...Children) {
 
 	in := make(chan Token, 10)
 	for _, child := range children {
@@ -34,7 +39,6 @@ func node(id string, msg Message, value int32, children ...Children) {
 		token := Token{id, -1}
 		newInitiator := token
 		for _, child := range children {
-			fmt.Printf("%s -> %s\n", child.ID, id)
 			child.To <- token
 			tmp := <-in
 			if tmp.value > newInitiator.value {
@@ -42,6 +46,11 @@ func node(id string, msg Message, value int32, children ...Children) {
 			}
 		}
 		fmt.Printf("O novo iniciador é: %s\n", newInitiator.Sender)
+		// Avisa aos filhos quem é o novo iniciador
+		for _, child := range children {
+			child.To <- newInitiator
+		}
+		wg.Wait()
 	} else {
 		parent := <-in
 		token := Token{id, value}
@@ -54,12 +63,22 @@ func node(id string, msg Message, value int32, children ...Children) {
 				if tmp.value > greatest.value {
 					greatest = tmp
 				}
-				fmt.Printf("%s -> %s\n", token.Sender, id)
 			} else {
 				parentIndex = index
 			}
 		}
+		//Envia o maior entre ele e seus filhos para o pai
 		children[parentIndex].To <- greatest
+		//Recebe o novo iniciador do pai
+		greatest = <-in
+		fmt.Printf("%s foi avisado que %s é o novo iniciador\n", id, greatest.Sender)
+		//Avisa aos filhos quem é o novo iniciador
+		for _, child := range children {
+			if child.ID != parent.Sender {
+				child.To <- greatest
+			}
+		}
+		wg.Done()
 	}
 }
 
@@ -73,9 +92,11 @@ func main() {
 	sP := make(chan Token, 1)
 	pS := make(chan Token, 1)
 
-	go node("T", Message{}, 40, Children{"Q", qT, tQ})
-	go node("S", Message{}, 6, Children{"P", pS, sP})
-	go node("R", Message{}, 10, Children{"P", pR, rP})
-	go node("Q", Message{}, 70, Children{"T", tQ, qT}, Children{"P", pQ, qP})
-	node("P", Message{"init"}, 9, Children{"Q", qP, pQ}, Children{"R", rP, pR}, Children{"S", sP, pS})
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go node("T", Message{}, 40, &wg, Children{"Q", qT, tQ})
+	go node("S", Message{}, 6, &wg, Children{"P", pS, sP})
+	go node("R", Message{}, 10, &wg, Children{"P", pR, rP})
+	go node("Q", Message{}, 70, &wg, Children{"T", tQ, qT}, Children{"P", pQ, qP})
+	node("P", Message{"init"}, 9, &wg, Children{"Q", qP, pQ}, Children{"R", rP, pR}, Children{"S", sP, pS})
 }
