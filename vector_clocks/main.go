@@ -13,6 +13,7 @@ type Message struct {
 }
 
 func event(pid int, counter [3]int) {
+	counter[pid-1]++
 	fmt.Printf("Event in process pid=%v. Contador = %v\n", pid, counter)
 }
 

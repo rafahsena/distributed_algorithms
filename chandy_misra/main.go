@@ -51,12 +51,10 @@ func process(id string, token Token, wg *sync.WaitGroup, neighs ...Neighbour) {
 	} else {
 		for tk := range in {
 			// Processo não iniciador
-			fmt.Printf("De %s para %s\n", tk.Sender, id)
 			neigh := nmap[tk.Sender]
 			if tk.dist+neigh.Weight < dist {
 				dist = tk.dist + neigh.Weight
 				pai = neigh
-				fmt.Printf("* %s é pai de %s, e a dist até o iniciador é: %d\n", pai.ID, id, dist)
 
 				for _, neigh := range neighs {
 					// Entrega o token para o vizinho se ele não for o pai
